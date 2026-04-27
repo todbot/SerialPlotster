@@ -86,12 +86,22 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            pkg-config \
+            libudev-dev \
             libwebkit2gtk-4.1-dev \
             libappindicator3-dev \
             librsvg2-dev \
             patchelf
 
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install frontend dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: npm ci
 
       # ── macOS: import Developer ID certificate into a temporary keychain ────
@@ -145,14 +155,24 @@ jobs:
       # Azure.CodeSigning.Dlib.dll — the plugin signtool.exe uses to authenticate
       # to the Trusted Signing service.  We then point Tauri at a custom sign
       # command so it calls signtool + dlib for every binary it packages.
+      - name: Cache Trusted Signing NuGet package
+        if: matrix.platform == 'windows-latest' && inputs.sign_windows
+        id: cache-tsc
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/tsc-pkg
+          key: tsc-nuget-1.0.60
+
       - name: Configure Azure Trusted Signing
         if: matrix.platform == 'windows-latest' && inputs.sign_windows
         shell: pwsh
         run: |
-          # Download and unpack the Trusted Signing client NuGet package
+          # Download and unpack the Trusted Signing client NuGet package (skipped on cache hit)
           $pkgDir = "$env:RUNNER_TEMP\tsc-pkg"
-          nuget install Microsoft.Trusted.Signing.Client `
-            -Version 1.0.60 -OutputDirectory $pkgDir -NonInteractive
+          if ("${{ steps.cache-tsc.outputs.cache-hit }}" -ne "true") {
+            nuget install Microsoft.Trusted.Signing.Client `
+              -Version 1.0.60 -OutputDirectory $pkgDir -NonInteractive
+          }
 
           # Locate the x64 DLIB
           $dlibPath = (Get-ChildItem $pkgDir -Recurse -Filter "Azure.CodeSigning.Dlib.dll" |
