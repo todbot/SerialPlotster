@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::menu::{AboutMetadata, MenuBuilder, SubmenuBuilder};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
+#[cfg(debug_assertions)]
+use tauri::Manager;
 
 // ── event payloads ────────────────────────────────────────────────────────────
 
