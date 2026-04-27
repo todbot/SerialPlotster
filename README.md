@@ -4,16 +4,17 @@ A cross-platform desktop serial plotter built with [Tauri 2](https://tauri.app).
 
 ![status: early development](https://img.shields.io/badge/status-early%20development-yellow)
 
-<img src="./docs/screenshot1.png" width=700"/>
+<img src="./docs/screenshot1.png" width="425">
 
 ## Features
 
 - **Live strip chart** — canvas-based renderer driven by `requestAnimationFrame`, no charting library
 - **Non-blocking scrub/zoom** — drag or trackpad-swipe to pan through history while data keeps arriving; Ctrl+scroll or pinch to zoom; double-click to snap back to live
-- **Auto-scaling Y axis** — scales to the visible window, not all-time extremes
-- **Multi-series** — up to 8 colour-coded series; click legend swatches to toggle visibility
-- **Flexible parser** — comma, tab, or space delimited; Arduino-style `label:value` pairs; `# header` lines for series names; malformed lines silently skipped
-- **Console pane** — scrolling RX/TX log with timestamps; send field with configurable line ending
+- **Auto or fixed Y axis** — auto-scales to the visible window, or lock to a manual min/max range
+- **Multi-series** — colour-coded series; click legend swatches to toggle visibility
+- **Flexible parser** — comma, tab, or space delimited; Arduino-style `label:value` pairs; Python tuple/list syntax; `# header` lines for series names; malformed lines silently skipped
+- **Device restart detection** — a new `# header` line mid-stream clears the old series and starts fresh with the new names
+- **Console pane** — scrolling RX/TX log with timestamps; send field with configurable line ending; one-click ^C / ^D buttons
 - **Mock stream** — built-in synthetic sin/cos/noise source for development without hardware
 
 ## Supported data formats
@@ -26,7 +27,11 @@ Any line-oriented text where each line contains numbers:
 1.23\t4.56\t7.89        # tab-separated
 temp:23.5,hum:45.2      # Arduino label:value pairs
 # temperature humidity  # header line — sets series names
+(1.23, 4.56, 7.89)      # Python tuple
+[1.23, 4.56, 7.89]      # Python list
 ```
+
+Header lines name the series; a new header mid-stream (e.g. after a device restart) clears the old series and replots under the new names.
 
 ## Stack
 
@@ -73,40 +78,47 @@ cd src-tauri && cargo test     # Rust parser unit tests
 
 See [TESTING.md](TESTING.md) for how to exercise the Tauri commands and events from the browser devtools console.
 
+## CI / releases
+
+GitHub Actions workflow at `.github/workflows/build.yml` builds for macOS (arm64 + x86_64), Windows, and Linux on `workflow_dispatch`. Optional checkboxes enable:
+
+- macOS code signing and notarization (Developer ID certificate)
+- Windows signing via Azure Trusted Signing
+
+See [codesigning.md](codesigning.md) for the required secrets and setup steps.
+
 ## Project structure
 
 ```
 src/
   App.tsx
   components/
-    Header.tsx          — port picker, baud, connect/disconnect, status pill
-    TabNav.tsx          — Chart | Console tabs
-    PlotCanvas.tsx      — canvas rendering, rAF loop, scrub/zoom
-    PlotToolsOverlay.tsx — pause/resume, time-window selector
-    Legend.tsx          — series names + colour swatches, toggle visibility
-    ConsolePane.tsx     — wraps ConsoleLog + ConsoleInput
-    ConsoleLog.tsx      — scrolling RX/TX list with timestamps
-    ConsoleInput.tsx    — text field + line-ending picker + send button
+    Header.tsx           — port picker, baud, connect/disconnect, status pill
+    TabNav.tsx           — Chart | Console tabs
+    PlotCanvas.tsx       — canvas rendering, rAF loop, scrub/zoom
+    PlotToolsOverlay.tsx — Y-axis mode, pause/resume, time-window selector
+    Legend.tsx           — series names + colour swatches, toggle visibility
+    ConsolePane.tsx      — wraps ConsoleLog + ConsoleInput
+    ConsoleLog.tsx       — scrolling RX/TX list with timestamps
+    ConsoleInput.tsx     — ^C/^D buttons, text field, line-ending picker, Send
   hooks/
-    useSerialBackend.ts — Tauri command wrappers + event subscriptions
-    useRingBuffer.ts    — ring store as a React hook
+    useSerialBackend.ts  — Tauri command wrappers + event subscriptions
+    useRingBuffer.ts     — ring store as a React hook
   store/
-    RingStore.ts        — per-series Float32Array ring buffer + Float64Array timestamps
-    ConsoleStore.ts     — bounded list of RX/TX lines
+    RingStore.ts         — per-series Float32Array ring buffer + Float64Array timestamps
+    ConsoleStore.ts      — bounded list of RX/TX lines
   types/
-    serial.ts           — TypeScript types matching Rust event payloads
+    serial.ts            — TypeScript types matching Rust event payloads
 
 src-tauri/src/
-  lib.rs               — serial commands, read loop, line parser, mock stream
+  lib.rs                — serial commands, read loop, line parser, mock stream, app menu
 ```
 
+## Links
 
-## Links and notes
-
-- This project was created with the help of claude code
-- Heavily inspired by https://github.com/atomic14/web-serial-plotter
-
+- Inspired by [web-serial-plotter](https://github.com/atomic14/web-serial-plotter)
+- Built with [Claude Code](https://claude.ai/code)
 
 ## License
 
-MIT
+GPL-3.0-only — see [LICENSE](LICENSE).
