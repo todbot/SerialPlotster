@@ -92,6 +92,15 @@ fn parse_line(line: &str) -> Option<LineResult> {
         return if labels.is_empty() { None } else { Some(LineResult::Header(labels)) };
     }
 
+    // Strip optional Python tuple/list brackets: "(1,2,3)" or "[1,2,3]"
+    let line = match (line.chars().next(), line.chars().last()) {
+        (Some('('), Some(')')) | (Some('['), Some(']')) => line[1..line.len() - 1].trim(),
+        _ => line,
+    };
+    if line.is_empty() {
+        return None;
+    }
+
     // Data line — try delimiters in precedence order
     for &delim in &[',', '\t', ' '] {
         let tokens: Vec<&str> = line
@@ -697,6 +706,52 @@ mod tests {
     fn spaces_around_comma_tokens() {
         assert_eq!(
             parse_line("1.0 , 2.0 , 3.0"),
+            Some(LineResult::Data {
+                values: vec![1.0, 2.0, 3.0],
+                labels: None,
+            })
+        );
+    }
+
+    // ── Python tuple / list syntax ────────────────────────────────────────────
+
+    #[test]
+    fn python_tuple() {
+        assert_eq!(
+            parse_line("(1, 2, 3)"),
+            Some(LineResult::Data {
+                values: vec![1.0, 2.0, 3.0],
+                labels: None,
+            })
+        );
+    }
+
+    #[test]
+    fn python_list() {
+        assert_eq!(
+            parse_line("[1.5, -2.5, 3.0]"),
+            Some(LineResult::Data {
+                values: vec![1.5, -2.5, 3.0],
+                labels: None,
+            })
+        );
+    }
+
+    #[test]
+    fn python_tuple_single() {
+        assert_eq!(
+            parse_line("(42.0)"),
+            Some(LineResult::Data {
+                values: vec![42.0],
+                labels: None,
+            })
+        );
+    }
+
+    #[test]
+    fn python_list_with_spaces() {
+        assert_eq!(
+            parse_line("[ 1.0 , 2.0 , 3.0 ]"),
             Some(LineResult::Data {
                 values: vec![1.0, 2.0, 3.0],
                 labels: None,
