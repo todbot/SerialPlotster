@@ -4,7 +4,7 @@ A cross-platform desktop serial plotter built with [Tauri 2](https://tauri.app).
 
 ![status: early development](https://img.shields.io/badge/status-early%20development-yellow)
 
-<img src="./docs/screenshot1.png" width="425">
+<img src="./docs/screenshot1.png" width="700">
 
 ## Features
 
