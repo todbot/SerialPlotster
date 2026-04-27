@@ -1,0 +1,78 @@
+import { useEffect, useState } from 'react';
+import type { ConnectionState } from '../types/serial';
+
+const BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
+
+interface HeaderProps {
+  status: ConnectionState;
+  ports: string[];
+  onRefreshPorts: () => void;
+  onConnect: (port: string, baud: number) => void;
+  onDisconnect: () => void;
+}
+
+export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect }: HeaderProps) {
+  const [port, setPort] = useState('');
+  const [baud, setBaud] = useState(115200);
+  const connected = status === 'connected';
+
+  useEffect(() => {
+    if (ports.length > 0 && !port) setPort(ports[0]);
+  }, [ports, port]);
+
+  const statusColor =
+    status === 'connected' ? 'bg-green-500' :
+    status === 'error'     ? 'bg-red-500' :
+                             'bg-gray-500';
+
+  return (
+    <header className="flex items-center gap-2 px-3 h-11 bg-gray-800 border-b border-gray-700 flex-none select-none">
+      <button
+        onClick={onRefreshPorts}
+        title="Refresh port list"
+        className="flex items-center gap-1 text-gray-300 hover:text-white text-xs bg-gray-700 hover:bg-gray-600 rounded px-2 py-1 border border-gray-600"
+      >
+        ⟳ Ports
+      </button>
+
+      <select
+        value={port}
+        onChange={(e) => setPort(e.target.value)}
+        disabled={connected}
+        className="bg-gray-700 text-sm text-white rounded px-2 py-1 border border-gray-600 disabled:opacity-50 min-w-32"
+      >
+        {ports.length === 0 && <option value="">No ports</option>}
+        {ports.map((p) => <option key={p} value={p}>{p}</option>)}
+      </select>
+
+      <select
+        value={baud}
+        onChange={(e) => setBaud(Number(e.target.value))}
+        disabled={connected}
+        className="bg-gray-700 text-sm text-white rounded px-2 py-1 border border-gray-600 disabled:opacity-50"
+      >
+        {BAUD_RATES.map((b) => <option key={b} value={b}>{b}</option>)}
+      </select>
+
+      {connected ? (
+        <button
+          onClick={onDisconnect}
+          className="bg-red-700 hover:bg-red-600 text-white text-sm rounded px-3 py-1"
+        >
+          Disconnect
+        </button>
+      ) : (
+        <button
+          onClick={() => port && onConnect(port, baud)}
+          disabled={!port}
+          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm rounded px-3 py-1"
+        >
+          Connect
+        </button>
+      )}
+
+      <div className={`w-2.5 h-2.5 rounded-full ${statusColor} flex-none`} title={status} />
+      <span className="text-xs text-gray-400">{status}</span>
+    </header>
+  );
+}
