@@ -109,7 +109,7 @@ export function PlotToolsOverlay({
       <select
         value={windowMs}
         onChange={(e) => onWindowChange(Number(e.target.value))}
-        className="bg-gray-700 text-white rounded px-2 py-0.5 border border-gray-600 text-xs [&>option]:bg-gray-700 [&>option]:text-white"
+        className="bg-gray-700 text-white rounded px-2 py-0.5 border border-gray-600 text-xs [&>option]:bg-gray-700 [&>option]:text-white [color-scheme:dark]"
       >
         {WINDOW_OPTIONS.map(({ label, ms }) => (
           <option key={ms} value={ms}>{label}</option>
