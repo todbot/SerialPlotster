@@ -4,6 +4,7 @@ use std::io::Write as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tauri::menu::{AboutMetadata, MenuBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, State};
 
 // ── event payloads ────────────────────────────────────────────────────────────
@@ -489,6 +490,66 @@ pub fn run() {
         .manage(AppState::new())
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let about = AboutMetadata {
+                name:      Some("SerialPlotster".into()),
+                version:   Some(env!("CARGO_PKG_VERSION").into()),
+                authors:   Some(vec!["Tod Kurt".into()]),
+                comments:  Some("A cross-platform serial plotter for Arduino and other devices.".into()),
+                copyright: Some("© 2026 Tod Kurt".into()),
+                // Renders as a clickable link on Linux (GTK). On macOS the link
+                // comes from Credits.html in the app bundle (see tauri.conf.json).
+                website:       Some("https://github.com/todbot/SerialPlotster".into()),
+                website_label: Some("github.com/todbot/SerialPlotster".into()),
+                ..Default::default()
+            };
+
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+
+            // macOS: first submenu becomes the app menu (shown as the app name).
+            // Hide/HideOthers/ShowAll are macOS-only conventions.
+            #[cfg(target_os = "macos")]
+            let menu = {
+                let app_menu = SubmenuBuilder::new(app, "SerialPlotster")
+                    .about(Some(about))
+                    .separator()
+                    .hide()
+                    .hide_others()
+                    .show_all()
+                    .separator()
+                    .quit()
+                    .build()?;
+                MenuBuilder::new(app)
+                    .item(&app_menu)
+                    .item(&edit_menu)
+                    .build()?
+            };
+
+            // Windows / Linux: standard File menu with About + Quit.
+            #[cfg(not(target_os = "macos"))]
+            let menu = {
+                let file_menu = SubmenuBuilder::new(app, "File")
+                    .about(Some(about))
+                    .separator()
+                    .quit()
+                    .build()?;
+                MenuBuilder::new(app)
+                    .item(&file_menu)
+                    .item(&edit_menu)
+                    .build()?
+            };
+
+            app.set_menu(menu)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             list_ports,
             connect,
