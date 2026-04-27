@@ -43,7 +43,7 @@ export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect,
         value={port}
         onChange={(e) => setPort(e.target.value)}
         disabled={connected}
-        className="bg-gray-700 text-sm text-white rounded px-2 py-1 border border-gray-600 disabled:opacity-50 min-w-32"
+        className="bg-gray-700 text-sm text-white rounded px-2 py-1 border border-gray-600 disabled:opacity-50 min-w-32 [&>option]:bg-gray-700 [&>option]:text-white"
       >
         {ports.length === 0 && <option value="">No ports</option>}
         {ports.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -53,7 +53,7 @@ export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect,
         value={baud}
         onChange={(e) => setBaud(Number(e.target.value))}
         disabled={connected}
-        className="bg-gray-700 text-sm text-white rounded px-2 py-1 border border-gray-600 disabled:opacity-50"
+        className="bg-gray-700 text-sm text-white rounded px-2 py-1 border border-gray-600 disabled:opacity-50 [&>option]:bg-gray-700 [&>option]:text-white"
       >
         {BAUD_RATES.map((b) => <option key={b} value={b}>{b}</option>)}
       </select>
@@ -81,7 +81,7 @@ export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect,
           <select
             value={mockShape}
             onChange={(e) => setMockShape(e.target.value)}
-            className="bg-gray-700 text-xs text-gray-300 rounded px-1.5 py-1 border border-gray-600"
+            className="bg-gray-700 text-xs text-gray-300 rounded px-1.5 py-1 border border-gray-600 [&>option]:bg-gray-700 [&>option]:text-white"
           >
             {MOCK_SHAPES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>

@@ -61,7 +61,7 @@ export function ConsoleInput({ disabled, onSend }: ConsoleInputProps) {
         value={ending}
         onChange={(e) => setEnding(e.target.value)}
         disabled={disabled}
-        className="bg-gray-700 text-xs text-white rounded px-1 py-1 border border-gray-600 disabled:opacity-40"
+        className="bg-gray-700 text-xs text-white rounded px-1 py-1 border border-gray-600 disabled:opacity-40 [&>option]:bg-gray-700 [&>option]:text-white"
       >
         {LINE_ENDINGS.map(({ label, value }) => (
           <option key={label} value={value}>{label}</option>
