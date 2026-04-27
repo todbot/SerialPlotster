@@ -1,8 +1,9 @@
 [package]
 name = "serial-plotster"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "A cross-platform serial plotter for Arduino and other devices"
+authors = ["Tod Kurt <tod@todbot.com>"]
+license = "GPL-3.0-only"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
