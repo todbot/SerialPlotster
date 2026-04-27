@@ -71,5 +71,9 @@ export function useSerialBackend(
     await invoke('send_line', { text, lineEnding });
   }, []);
 
-  return { status, ports, listPorts, connect, disconnect, sendLine };
+  const startMockStream = useCallback(async (shape = 'all', rateHz = 50) => {
+    await invoke('start_mock_stream', { shape, rateHz });
+  }, []);
+
+  return { status, ports, listPorts, connect, disconnect, sendLine, startMockStream };
 }
