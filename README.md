@@ -25,13 +25,16 @@ Any line-oriented text where each line contains numbers:
 1.23,4.56,7.89          # comma-separated
 1.23  4.56  7.89        # space-separated
 1.23\t4.56\t7.89        # tab-separated
-temp:23.5,hum:45.2      # Arduino label:value pairs
-# temperature humidity  # header line — sets series names
+temp:23.5, hum:45.2     # Arduino label:value pairs (sets series names)
 (1.23, 4.56, 7.89)      # Python tuple
 [1.23, 4.56, 7.89]      # Python list
+# temperature humidity  # header line — sets series names
 ```
 
-Header lines name the series; a new header mid-stream (e.g. after a device restart) clears the old series and replots under the new names.
+In general it tries to be very lenient in parsing. 
+
+Header lines name the series; a new header mid-stream (e.g. after a device restart) 
+clears the old series and replots under the new names.
 
 ## Stack
 
