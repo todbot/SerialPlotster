@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::menu::{AboutMetadata, MenuBuilder, SubmenuBuilder};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 // ── event payloads ────────────────────────────────────────────────────────────
 
@@ -515,6 +515,11 @@ pub fn run() {
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            #[cfg(debug_assertions)]
+            {
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+            }
             let about = AboutMetadata {
                 name:      Some("SerialPlotster".into()),
                 version:   Some(env!("CARGO_PKG_VERSION").into()),
