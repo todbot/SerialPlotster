@@ -3,17 +3,21 @@ import type { ConnectionState } from '../types/serial';
 
 const BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
+const MOCK_SHAPES = ['all', 'sincos', 'sin', 'cos', 'noise'];
+
 interface HeaderProps {
   status: ConnectionState;
   ports: string[];
   onRefreshPorts: () => void;
   onConnect: (port: string, baud: number) => void;
   onDisconnect: () => void;
+  onMock?: (shape: string) => void;
 }
 
-export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect }: HeaderProps) {
+export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect, onMock }: HeaderProps) {
   const [port, setPort] = useState('');
   const [baud, setBaud] = useState(115200);
+  const [mockShape, setMockShape] = useState('all');
   const connected = status === 'connected';
 
   useEffect(() => {
@@ -71,6 +75,26 @@ export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect 
         </button>
       )}
 
+      {import.meta.env.DEV && onMock && !connected && (
+        <>
+          <div className="w-px h-5 bg-gray-600 mx-1" />
+          <select
+            value={mockShape}
+            onChange={(e) => setMockShape(e.target.value)}
+            className="bg-gray-700 text-xs text-gray-300 rounded px-1.5 py-1 border border-gray-600"
+          >
+            {MOCK_SHAPES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <button
+            onClick={() => onMock(mockShape)}
+            className="text-xs bg-purple-700 hover:bg-purple-600 text-white rounded px-2 py-1"
+          >
+            ▶ Mock
+          </button>
+        </>
+      )}
+
+      <div className="flex-1" />
       <div className={`w-2.5 h-2.5 rounded-full ${statusColor} flex-none`} title={status} />
       <span className="text-xs text-gray-400">{status}</span>
     </header>
