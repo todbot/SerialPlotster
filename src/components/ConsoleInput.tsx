@@ -25,8 +25,29 @@ export function ConsoleInput({ disabled, onSend }: ConsoleInputProps) {
     inputRef.current?.focus();
   }
 
+  function sendCtrl(char: string) {
+    onSend(char, '');
+    inputRef.current?.focus();
+  }
+
   return (
     <div className="flex gap-2 px-2 py-2 bg-gray-800 border-t border-gray-700 flex-none">
+      <button
+        onClick={() => sendCtrl('\x03')}
+        disabled={disabled}
+        title="Send Ctrl-C (ETX, 0x03)"
+        className="bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-gray-300 hover:text-white text-xs rounded px-2 py-1 border border-gray-600 font-mono flex-none"
+      >
+        ^C
+      </button>
+      <button
+        onClick={() => sendCtrl('\x04')}
+        disabled={disabled}
+        title="Send Ctrl-D (EOT, 0x04)"
+        className="bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-gray-300 hover:text-white text-xs rounded px-2 py-1 border border-gray-600 font-mono flex-none"
+      >
+        ^D
+      </button>
       <input
         ref={inputRef}
         value={text}
