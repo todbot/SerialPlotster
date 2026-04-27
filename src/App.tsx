@@ -19,9 +19,12 @@ if (import.meta.env.DEV) {
 const consoleStore = new ConsoleStore();
 
 export default function App() {
-  const { store: ringStore, seriesKeys, onNewSeries } = useRingBuffer();
+  const { store: ringStore, seriesKeys, onNewSeries, clearStore } = useRingBuffer();
   const { status, ports, listPorts, connect, disconnect, sendLine, startMockStream } =
-    useSerialBackend(ringStore, consoleStore, onNewSeries);
+    useSerialBackend(ringStore, consoleStore, onNewSeries, () => {
+      clearStore();
+      setHiddenSeries(new Set());
+    });
 
   const [tab, setTab] = useState<'chart' | 'console'>('chart');
   const [paused, setPaused] = useState(false);

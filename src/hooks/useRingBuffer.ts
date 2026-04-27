@@ -9,5 +9,10 @@ export function useRingBuffer(capacity = 100_000) {
     setSeriesKeys([...store.seriesKeys]);
   }, [store]);
 
-  return { store, seriesKeys, onNewSeries };
+  const clearStore = useCallback(() => {
+    store.clear();
+    setSeriesKeys([]);
+  }, [store]);
+
+  return { store, seriesKeys, onNewSeries, clearStore };
 }

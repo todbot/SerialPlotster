@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const WINDOW_OPTIONS = [
+  { label: '1s',  ms:   1_000 },
   { label: '5s',  ms:   5_000 },
   { label: '10s', ms:  10_000 },
   { label: '30s', ms:  30_000 },

@@ -18,11 +18,14 @@ export function useSerialBackend(
   ringStore: RingStore,
   consoleStore: ConsoleStore,
   onNewSeries: () => void,
+  onHeaderReset: () => void,
 ) {
   const [status, setStatus] = useState<ConnectionState>('disconnected');
   const [ports, setPorts] = useState<string[]>([]);
   const onNewSeriesRef = useRef(onNewSeries);
   onNewSeriesRef.current = onNewSeries;
+  const onHeaderResetRef = useRef(onHeaderReset);
+  onHeaderResetRef.current = onHeaderReset;
 
   useEffect(() => {
     const subs = [
@@ -38,6 +41,9 @@ export function useSerialBackend(
         const s = e.payload.state;
         setStatus(s);
         if (s === 'disconnected' || s === 'error') ringStore.addGap();
+      }),
+      listen('serial://gap', () => {
+        onHeaderResetRef.current();
       }),
     ];
 

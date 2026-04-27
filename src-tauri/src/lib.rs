@@ -173,6 +173,12 @@ fn process_line(line: &str, current_labels: &mut Vec<String>, app: &AppHandle) {
 
     match parse_line(line) {
         Some(LineResult::Header(labels)) => {
+            // A header mid-stream means the device restarted or re-identified its
+            // channels.  Insert a gap so the chart shows a clean break, then
+            // replace the labels so subsequent data uses the new names.
+            if !current_labels.is_empty() {
+                let _ = app.emit("serial://gap", ());
+            }
             *current_labels = labels;
         }
         Some(LineResult::Data { values, labels: inline }) => {
