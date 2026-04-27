@@ -5,7 +5,7 @@
 - [x] `npm create tauri-app` — React + TypeScript + Vite
 - [x] Fix identifier (`com.todbot.serial-plotster`), productName, window title
 - [x] `.gitignore` present (+ `src-tauri/target/` added)
-- [x] `README.md` stub present
+- [x] `README.md` filled out
 - [x] Add Tailwind CSS v4 via `@tailwindcss/vite`
 - [x] Add serial plugin: `cargo tauri add serialplugin`
 - [x] Verify `src-tauri/capabilities/default.json` includes `"serialplugin:default"`
@@ -32,23 +32,23 @@
 
 ---
 
-## Phase 2 — Frontend chart ⬜
+## Phase 2 — Frontend chart ✅
 
-- [ ] `types/serial.ts` — types matching Rust event payloads
-- [ ] `store/RingStore.ts` — per-series Float32Array ring buffer + Float64Array timestamps; NaN discontinuity markers
-- [ ] `store/ConsoleStore.ts` — bounded RX/TX line list
-- [ ] `hooks/useSerialBackend.ts` — Tauri command wrappers + event subscriptions
-- [ ] `hooks/useRingBuffer.ts` — ring store as React hook
-- [ ] `components/Header.tsx` — port picker, baud, connect/disconnect, status pill
-- [ ] `components/TabNav.tsx` — Chart | Console tabs
-- [ ] `components/PlotCanvas.tsx` — rAF render loop, live/scrub modes, pan, ctrl+wheel zoom, double-click reset, NaN gap rendering, disconnect annotation
-- [ ] `components/PlotToolsOverlay.tsx` — pause/resume, reset zoom, time-window selector
-- [ ] `components/Legend.tsx` — series names + color swatches, toggle visibility
-- [ ] `components/ConsolePane.tsx` — wraps ConsoleLog + ConsoleInput
-- [ ] `components/ConsoleLog.tsx` — scrolling RX/TX list with timestamps
-- [ ] `components/ConsoleInput.tsx` — text field + line-ending dropdown + send button
+- [x] `types/serial.ts` — types matching Rust event payloads
+- [x] `store/RingStore.ts` — per-series Float32Array ring buffer + Float64Array timestamps; NaN discontinuity markers
+- [x] `store/ConsoleStore.ts` — bounded RX/TX line list
+- [x] `hooks/useSerialBackend.ts` — Tauri command wrappers + event subscriptions
+- [x] `hooks/useRingBuffer.ts` — ring store as React hook
+- [x] `components/Header.tsx` — port picker, baud, connect/disconnect, status pill; manual ⟳ Ports refresh
+- [x] `components/TabNav.tsx` — Chart | Console tabs
+- [x] `components/PlotCanvas.tsx` — rAF render loop, live/scrub modes, drag-to-pan, trackpad horizontal swipe, ctrl+wheel/pinch zoom, double-click reset, NaN gap rendering
+- [x] `components/PlotToolsOverlay.tsx` — pause/resume, time-window selector, scrubbing indicator + back-to-live
+- [x] `components/Legend.tsx` — series colour swatches, click to toggle visibility
+- [x] `components/ConsolePane.tsx` — wraps ConsoleLog + ConsoleInput
+- [x] `components/ConsoleLog.tsx` — scrolling RX/TX list with timestamps, auto-scroll unless user has scrolled up
+- [x] `components/ConsoleInput.tsx` — text field + line-ending picker + send button
 
-**Acceptance:** sin/cos at 100 Hz draws smoothly; disconnect shows gap + status flip; scrub freezes view while data keeps arriving; send reaches device; malformed lines appear in console only.
+**Acceptance:** ✅ sin/cos at 100 Hz draws smoothly; disconnect shows gap + status flip; scrub freezes view while data keeps arriving; send reaches device; malformed lines appear in console only.
 
 ---
 
@@ -67,6 +67,8 @@
 - `src-tauri/target/` in `.gitignore`
 - `npm run clean` — removes `dist/` and `src-tauri/target/`
 - `npm run tauribuild` — alias for `tauri build`
+- `window.__ipc` exposed in dev builds for devtools testing (see `TESTING.md`)
+- Git repo initialised; pushed to GitHub
 
 ---
 

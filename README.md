@@ -98,6 +98,13 @@ src-tauri/src/
   lib.rs               — serial commands, read loop, line parser, mock stream
 ```
 
+
+## Links and notes
+
+- This project was created with the help of claude code
+- Heavily inspired by https://github.com/atomic14/web-serial-plotter
+
+
 ## License
 
 MIT

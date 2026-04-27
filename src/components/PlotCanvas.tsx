@@ -6,6 +6,8 @@ import { seriesColor } from './Legend';
 
 export interface PlotCanvasHandle {
   resetToLive(): void;
+  /** Returns the most recently auto-computed Y range (useful for seeding fixed mode). */
+  getAutoYRange(): { min: number; max: number };
 }
 
 interface PlotCanvasProps {
@@ -14,6 +16,8 @@ interface PlotCanvasProps {
   visible: Set<string>;
   windowMs: number;
   paused: boolean;
+  /** When set, skips auto-scaling and uses these exact Y bounds. */
+  yRange?: { min: number; max: number } | null;
   onScrubChange: (scrubbing: boolean) => void;
 }
 
@@ -38,6 +42,7 @@ type DrawProps = {
   visible: Set<string>;
   windowMs: number;
   paused: boolean;
+  yRange: { min: number; max: number } | null | undefined;
 };
 
 function drawFrame(
@@ -47,6 +52,7 @@ function drawFrame(
   store: RingStore,
   view: ViewState,
   props: DrawProps,
+  lastAutoYRange: { min: number; max: number },
 ): void {
   if (view.mode === 'live' && !props.paused) {
     view.endMs = Date.now();
@@ -74,25 +80,36 @@ function drawFrame(
     plotT + (1 - (v - yMin) / range) * plotH;
 
   // ── Y range ────────────────────────────────────────────────────────────────
-  let yMin = Infinity, yMax = -Infinity;
-  // Look back one extra window so a line entering from the left looks continuous
-  const scanStart = startMs - spanMs;
-  for (const key of props.seriesKeys) {
-    if (!props.visible.has(key)) continue;
-    store.forEachSample((t, ri) => {
-      if (t < scanStart) return;
-      if (t > endMs) return false;
-      const v = store.getValue(key, ri);
-      if (!isNaN(v) && t >= startMs) {
-        if (v < yMin) yMin = v;
-        if (v > yMax) yMax = v;
-      }
-    });
+  const scanStart = startMs - spanMs; // one extra window back for smooth entry at left edge
+  let yMin: number, yMax: number;
+  if (props.yRange) {
+    // Fixed mode — use caller-supplied bounds directly
+    yMin = props.yRange.min;
+    yMax = props.yRange.max;
+    if (yMin === yMax) { yMin -= 1; yMax += 1; }
+  } else {
+    // Auto mode — scan visible data in the current window
+    yMin = Infinity; yMax = -Infinity;
+    for (const key of props.seriesKeys) {
+      if (!props.visible.has(key)) continue;
+      store.forEachSample((t, ri) => {
+        if (t < scanStart) return;
+        if (t > endMs) return false;
+        const v = store.getValue(key, ri);
+        if (!isNaN(v) && t >= startMs) {
+          if (v < yMin) yMin = v;
+          if (v > yMax) yMax = v;
+        }
+      });
+    }
+    if (!isFinite(yMin)) { yMin = -1; yMax = 1; }
+    if (yMin === yMax) { yMin -= 1; yMax += 1; }
+    const yPad = (yMax - yMin) * 0.06;
+    yMin -= yPad; yMax += yPad;
+    // Remember for getAutoYRange()
+    lastAutoYRange.min = yMin;
+    lastAutoYRange.max = yMax;
   }
-  if (!isFinite(yMin)) { yMin = -1; yMax = 1; }
-  if (yMin === yMax) { yMin -= 1; yMax += 1; }
-  const yPad = (yMax - yMin) * 0.06;
-  yMin -= yPad; yMax += yPad;
   const yRange = yMax - yMin;
 
   // ── Y grid + labels ────────────────────────────────────────────────────────
@@ -161,19 +178,23 @@ function drawFrame(
 // ── component ─────────────────────────────────────────────────────────────────
 
 export const PlotCanvas = forwardRef<PlotCanvasHandle, PlotCanvasProps>(
-  function PlotCanvas({ store, seriesKeys, visible, windowMs, paused, onScrubChange }, ref) {
+  function PlotCanvas({ store, seriesKeys, visible, windowMs, paused, yRange, onScrubChange }, ref) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const viewRef = useRef<ViewState>({ mode: 'live', startMs: 0, endMs: 0 });
     const dragRef = useRef({ active: false, x0: 0, startMs0: 0, endMs0: 0 });
     // Keep a stable ref to current props so the rAF closure never goes stale.
-    const propsRef = useRef<DrawProps>({ seriesKeys, visible, windowMs, paused });
-    propsRef.current = { seriesKeys, visible, windowMs, paused };
+    const propsRef = useRef<DrawProps>({ seriesKeys, visible, windowMs, paused, yRange });
+    propsRef.current = { seriesKeys, visible, windowMs, paused, yRange };
     const scrubCbRef = useRef(onScrubChange);
     scrubCbRef.current = onScrubChange;
+    const lastAutoYRange = useRef({ min: -1, max: 1 });
 
     useImperativeHandle(ref, () => ({
       resetToLive() {
         viewRef.current.mode = 'live';
+      },
+      getAutoYRange() {
+        return { ...lastAutoYRange.current };
       },
     }));
 
@@ -193,7 +214,7 @@ export const PlotCanvas = forwardRef<PlotCanvasHandle, PlotCanvasProps>(
       ro.observe(canvas);
 
       function tick() {
-        drawFrame(ctx, canvas, dpr, store, viewRef.current, propsRef.current);
+        drawFrame(ctx, canvas, dpr, store, viewRef.current, propsRef.current, lastAutoYRange.current);
         rafId = requestAnimationFrame(tick);
       }
       rafId = requestAnimationFrame(tick);
@@ -262,7 +283,7 @@ export const PlotCanvas = forwardRef<PlotCanvasHandle, PlotCanvasProps>(
     return (
       <canvas
         ref={canvasRef}
-        className="block w-full h-full flex-1"
+        className="block w-full flex-1 min-h-0"
         style={{ cursor: dragRef.current.active ? 'grabbing' : 'crosshair' }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
