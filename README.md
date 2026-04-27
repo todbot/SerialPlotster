@@ -116,8 +116,11 @@ src-tauri/src/
 
 ## Links
 
-- Inspired by [web-serial-plotter](https://github.com/atomic14/web-serial-plotter)
-- Built with [Claude Code](https://claude.ai/code)
+- Inspired by:
+  - [atomic14 web-serial-plotter](https://github.com/atomic14/web-serial-plotter)
+  - [Arduino Serial Plotter tool](https://docs.arduino.cc/software/ide-v2/tutorials/ide-v2-serial-plotter/)
+  - [Mu serial plotter](https://codewith.mu/en/tutorials/1.0/plotter)
+- Built with help from [Claude Code](https://claude.ai/code)
 
 ## License
 
