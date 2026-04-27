@@ -102,6 +102,15 @@ fn parse_line(line: &str) -> Option<LineResult> {
         return None;
     }
 
+    // Normalise "label: value" → "label:value" so spaced colons work with any delimiter.
+    let normalized;
+    let line = if line.contains(": ") {
+        normalized = line.replace(": ", ":");
+        normalized.as_str()
+    } else {
+        line
+    };
+
     // Data line — try delimiters in precedence order
     for &delim in &[',', '\t', ' '] {
         let tokens: Vec<&str> = line
@@ -454,10 +463,19 @@ fn start_mock_stream(
                 }
             };
 
+            let t_ms = now_ms();
+            let text = labels.iter().zip(values.iter())
+                .map(|(l, v)| format!("{l}:{v:.4}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let _ = app_clone.emit(
+                "serial://raw",
+                RawEvent { t_ms, direction: "rx".to_string(), text },
+            );
             let _ = app_clone.emit(
                 "serial://sample",
                 SampleEvent {
-                    t_ms: now_ms(),
+                    t_ms,
                     values,
                     labels: Some(labels.iter().map(|s| s.to_string()).collect()),
                 },
@@ -692,6 +710,28 @@ mod tests {
             Some(LineResult::Data {
                 values: vec![1.0, 2.0, 3.0],
                 labels: Some(vec!["x".into(), "y".into(), "z".into()]),
+            })
+        );
+    }
+
+    #[test]
+    fn label_value_spaced_colon_space_delim() {
+        assert_eq!(
+            parse_line("temp: 23.5 hum: 45.2 co2: 339"),
+            Some(LineResult::Data {
+                values: vec![23.5, 45.2, 339.0],
+                labels: Some(vec!["temp".into(), "hum".into(), "co2".into()]),
+            })
+        );
+    }
+
+    #[test]
+    fn label_value_spaced_colon_comma_delim() {
+        assert_eq!(
+            parse_line("temp: 23.5,hum: 45.2,co2: 339"),
+            Some(LineResult::Data {
+                values: vec![23.5, 45.2, 339.0],
+                labels: Some(vec!["temp".into(), "hum".into(), "co2".into()]),
             })
         );
     }
