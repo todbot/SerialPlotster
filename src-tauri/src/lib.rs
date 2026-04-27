@@ -172,11 +172,15 @@ fn parse_line(line: &str) -> Option<LineResult> {
 // ── read loop ─────────────────────────────────────────────────────────────────
 
 /// Emit `serial://raw` and, on successful parse, `serial://sample`.
-fn process_line(line: &str, current_labels: &mut Vec<String>, app: &AppHandle) {
+///
+/// `t_ms` is supplied by the caller so that multiple lines from the same
+/// `read()` batch each get a distinct, monotonically-increasing timestamp
+/// rather than all sharing the same `now_ms()` value.
+fn process_line(line: &str, t_ms: u64, current_labels: &mut Vec<String>, app: &AppHandle) {
     let _ = app.emit(
         "serial://raw",
         RawEvent {
-            t_ms: now_ms(),
+            t_ms,
             direction: "rx".to_string(),
             text: line.to_owned(),
         },
@@ -203,7 +207,7 @@ fn process_line(line: &str, current_labels: &mut Vec<String>, app: &AppHandle) {
             let _ = app.emit(
                 "serial://sample",
                 SampleEvent {
-                    t_ms: now_ms(),
+                    t_ms,
                     values,
                     labels: event_labels,
                 },
@@ -227,6 +231,11 @@ fn spawn_read_loop(
         let mut buf = [0u8; 4096];
         let mut line_buf = String::new();
         let mut current_labels: Vec<String> = Vec::new();
+        // Monotonic timestamp: each parsed line gets at least 1 ms more than the
+        // previous one so that lines arriving in the same OS read() batch (e.g.
+        // several USB-buffered samples) are spread out on the time axis rather
+        // than all collapsing to a single point.
+        let mut last_t_ms: u64 = 0;
 
         loop {
             if stop_flag.load(Ordering::Relaxed) {
@@ -252,7 +261,11 @@ fn spawn_read_loop(
                         if ch == '\n' {
                             let line = line_buf.trim_end_matches('\r').to_string();
                             if !line.is_empty() {
-                                process_line(&line, &mut current_labels, &app);
+                                // Ensure each line gets a strictly increasing timestamp
+                                // even when multiple lines arrive in one read() call.
+                                let t = now_ms().max(last_t_ms + 1);
+                                last_t_ms = t;
+                                process_line(&line, t, &mut current_labels, &app);
                             }
                             line_buf.clear();
                         } else if ch != '\r' {
@@ -348,7 +361,7 @@ fn connect(
         .parity(par)
         .stop_bits(sb)
         .flow_control(fc)
-        .timeout(Duration::from_millis(50))
+        .timeout(Duration::from_millis(100))
         .open()
         .map_err(|e| e.to_string())?;
 
