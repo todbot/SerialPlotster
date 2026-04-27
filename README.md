@@ -17,6 +17,7 @@ A cross-platform desktop serial plotter built with [Tauri 2](https://tauri.app).
 - **Console pane** — scrolling RX/TX log with timestamps; send field with configurable line ending; one-click ^C / ^D buttons
 - **Mock stream** — built-in synthetic sin/cos/noise source for development without hardware
 
+
 ## Supported data formats
 
 Any line-oriented text where each line contains numbers:
@@ -35,6 +36,37 @@ In general it tries to be very lenient in parsing.
 
 Header lines name the series; a new header mid-stream (e.g. after a device restart) 
 clears the old series and replots under the new names.
+
+## Chart controls
+
+### Navigation
+
+| Action | Result |
+|---|---|
+| Click + drag | Pan in time (enters scrub mode) |
+| Horizontal trackpad swipe | Pan in time (enters scrub mode) |
+| Ctrl + scroll wheel | Zoom in/out, pivoting around the mouse cursor |
+| Ctrl + trackpad pinch | Zoom in/out |
+| Double-click | Exit scrub mode, snap back to live |
+| **back to live** button | Exit scrub mode, snap back to live |
+
+Data continues accumulating in the buffer while scrubbing — you never miss samples.
+
+### Y axis
+
+| Control | Result |
+|---|---|
+| **Y: Auto** button | Auto-scales Y to the visible data in the current window |
+| **Y: Fixed** button | Lock Y to a manual range; edit the min/max fields and press Enter |
+
+### Other controls
+
+| Control | Result |
+|---|---|
+| Time window selector | Sets the width of the visible time window (1 s – 5 m) |
+| **⏸ Pause** / **▶ Resume** | Freeze/resume the live view (data still accumulates) |
+| Legend swatches | Click to toggle individual series visibility |
+
 
 ## Stack
 

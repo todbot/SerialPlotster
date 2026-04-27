@@ -28,7 +28,7 @@
     "targets": "all",
     "resources": ["Credits.html"],
     "publisher": "Tod Kurt",
-    "copyright": "© 2025 Tod Kurt",
+    "copyright": "© 2026 Tod Kurt",
     "homepage": "https://github.com/todbot/SerialPlotster",
     "shortDescription": "A cross-platform serial plotter for Arduino and other devices.",
     "icon": [
