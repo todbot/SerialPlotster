@@ -1,6 +1,6 @@
 [package]
 name = "serial-plotster"
-version = "0.1.0"
+version = "0.2.0"
 description = "A cross-platform serial plotter for Arduino and other devices"
 authors = ["Tod Kurt <tod@todbot.com>"]
 license = "GPL-3.0-only"
