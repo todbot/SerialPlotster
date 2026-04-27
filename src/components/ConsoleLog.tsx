@@ -34,7 +34,7 @@ export function ConsoleLog({ store }: ConsoleLogProps) {
     >
       {lines.map((line, i) => (
         <div key={i} className="flex gap-2 leading-5">
-          <span className="text-gray-600 flex-none w-16 text-right">
+          <span className="text-gray-600 flex-none w-24 text-right">
             {new Date(line.t_ms).toISOString().slice(11, 23)}
           </span>
           <span className={line.direction === 'tx' ? 'text-yellow-400' : 'text-gray-300'}>
