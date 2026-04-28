@@ -54,7 +54,7 @@ jobs:
           - platform: macos-latest   # arm64 (Apple Silicon)
             rust-target: aarch64-apple-darwin
             tauri-args: --target aarch64-apple-darwin
-          - platform: macos-13       # x86_64 (Intel)
+          - platform: macos-latest   # x86_64 cross-compiled on Apple Silicon
             rust-target: x86_64-apple-darwin
             tauri-args: --target x86_64-apple-darwin
           - platform: windows-latest
@@ -65,6 +65,9 @@ jobs:
             tauri-args: ''
 
     runs-on: ${{ matrix.platform }}
+
+    permissions:
+      contents: write   # required to upload assets to a release
 
     steps:
       - uses: actions/checkout@v4
@@ -111,7 +114,7 @@ jobs:
       # ── macOS: import Developer ID certificate into a temporary keychain ────
       - name: Import macOS signing certificate
         if: >
-          (matrix.platform == 'macos-latest' || matrix.platform == 'macos-13')
+          (matrix.platform == 'macos-latest')
           && inputs.sign_macos
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -141,13 +144,13 @@ jobs:
       # env block on the build step stays unconditional (simpler expression).
       - name: Set macOS signing env
         if: >
-          (matrix.platform == 'macos-latest' || matrix.platform == 'macos-13')
+          (matrix.platform == 'macos-latest')
           && inputs.sign_macos
         run: echo "APPLE_SIGNING_IDENTITY=${{ secrets.APPLE_SIGNING_IDENTITY }}" >> "$GITHUB_ENV"
 
       - name: Set macOS notarization env
         if: >
-          (matrix.platform == 'macos-latest' || matrix.platform == 'macos-13')
+          (matrix.platform == 'macos-latest')
           && inputs.notarize_macos
         run: |
           echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> "$GITHUB_ENV"
@@ -240,7 +243,7 @@ jobs:
       - name: Delete macOS build keychain
         if: >
           always()
-          && (matrix.platform == 'macos-latest' || matrix.platform == 'macos-13')
+          && (matrix.platform == 'macos-latest')
           && inputs.sign_macos
           && env.KEYCHAIN_PATH != ''
         run: security delete-keychain "$KEYCHAIN_PATH" || true
