@@ -120,7 +120,7 @@ GitHub Actions workflow at `.github/workflows/build.yml` builds for macOS (arm64
 - macOS code signing and notarization (Developer ID certificate)
 - Windows signing via Azure Trusted Signing
 
-See [codesigning.md](./docs/codesigning.md) for the required secrets and setup steps.
+See [CODESIGNING.md](./docs/CODESIGNING.md) for the required secrets and setup steps.
 
 ## Project structure
 
