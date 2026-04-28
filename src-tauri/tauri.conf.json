@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["dmg", "msi", "nsis", "deb", "rpm", "appimage"],
     "resources": ["Credits.html"],
     "publisher": "Tod Kurt",
     "copyright": "© 2026 Tod Kurt",

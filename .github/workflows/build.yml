@@ -226,7 +226,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.id')
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '.[0].id')
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
       - name: Build Tauri app
