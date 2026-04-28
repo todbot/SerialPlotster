@@ -1,4 +1,4 @@
-# <img src="./docs/SerialPlotster-icon.svg" width=50 style="vertical-align: middle"> SerialPlotster
+# <img src="./docs/SerialPlotster-icon.svg" width=50 style="vertical-align: bottom"> SerialPlotster
 
 A cross-platform desktop serial plotter built with [Tauri 2](https://tauri.app). Graphs line-oriented numeric data from a serial port as a real-time strip chart, with scrub/zoom that does not pause data collection, plus a console pane for bidirectional communication with the device.
 
