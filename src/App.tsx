@@ -44,6 +44,11 @@ export default function App() {
   // Load ports on mount only. Use the ⟳ Ports button to refresh manually.
   useEffect(() => { listPorts(); }, [listPorts]);
 
+  // Exit scrub mode whenever a new connection is established.
+  useEffect(() => {
+    if (status === 'connected') resetView();
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function toggleSeries(key: string) {
     setHiddenSeries((prev) => {
       const next = new Set(prev);
