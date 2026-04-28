@@ -1,0 +1,28 @@
+<svg width="100%" viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg" role="img" style="">
+<title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Serial plotter app icon</title>
+<desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">A rounded square dark icon with a pronounced top-down gradient, a green sawtooth ramp on top, an amber analog wave, a fast purple wave, and a coral digital bitstream at the bottom.</desc>
+
+<defs>
+<clipPath id="iconClip">
+<rect x="40" y="40" width="600" height="600" rx="120" ry="120"/>
+</clipPath>
+<linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#2e3850"/>
+<stop offset="100%" stop-color="#05070b"/>
+</linearGradient>
+</defs>
+
+<rect x="40" y="40" width="600" height="600" rx="120" ry="120" fill="url(#bgGradient)" style="stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<g clip-path="url(#iconClip)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<line x1="40" y1="340" x2="640" y2="340" stroke="#3a4458" stroke-width="2" stroke-dasharray="6 8" stroke-linecap="round" style="fill:rgb(0, 0, 0);stroke:rgb(58, 68, 88);color:rgb(0, 0, 0);stroke-width:2px;stroke-dasharray:6px, 8px;stroke-linecap:round;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<polyline points="90,205 210,135 210,205 330,135 330,205 450,135 450,205 570,135" fill="none" stroke="#7ee08a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" style="fill:none;stroke:rgb(126, 224, 138);color:rgb(0, 0, 0);stroke-width:9px;stroke-linecap:round;stroke-linejoin:round;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<path d="M 90 285 C 130 345, 180 375, 220 325 S 290 215, 340 265 S 410 355, 460 305 S 540 195, 570 285" fill="none" stroke="#f5a25e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" style="fill:none;stroke:rgb(245, 162, 94);color:rgb(0, 0, 0);stroke-width:9px;stroke-linecap:round;stroke-linejoin:round;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<path d="M 90 395 C 110 335, 130 335, 150 395 S 190 455, 210 395 S 250 335, 270 395 S 310 455, 330 395 S 370 335, 390 395 S 430 455, 450 395 S 490 335, 510 395 S 550 455, 570 395" fill="none" stroke="#b57ef0" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" style="fill:none;stroke:rgb(181, 126, 240);color:rgb(0, 0, 0);stroke-width:9px;stroke-linecap:round;stroke-linejoin:round;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+<polyline points="90,545 150,545 150,475 210,475 210,545 270,545 270,475 330,475 330,545 390,545 390,475 450,475 450,545 510,545 510,475 570,475" fill="none" stroke="#f07e7e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" style="fill:none;stroke:rgb(240, 126, 126);color:rgb(0, 0, 0);stroke-width:9px;stroke-linecap:round;stroke-linejoin:round;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+</g>
+</svg>
