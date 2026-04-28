@@ -111,7 +111,7 @@ npm run clean        # removes dist/ and src-tauri/target/
 cd src-tauri && cargo test     # Rust parser unit tests
 ```
 
-See [TESTING.md](TESTING.md) for how to exercise the Tauri commands and events from the browser devtools console.
+See [TESTING.md](./docs/TESTING.md) for how to exercise the Tauri commands and events from the browser devtools console.
 
 ## CI / releases
 
@@ -120,7 +120,7 @@ GitHub Actions workflow at `.github/workflows/build.yml` builds for macOS (arm64
 - macOS code signing and notarization (Developer ID certificate)
 - Windows signing via Azure Trusted Signing
 
-See [codesigning.md](codesigning.md) for the required secrets and setup steps.
+See [codesigning.md](./docs/codesigning.md) for the required secrets and setup steps.
 
 ## Project structure
 
