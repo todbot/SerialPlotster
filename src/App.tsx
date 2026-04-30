@@ -40,6 +40,10 @@ export default function App() {
   const [yMax, setYMax] = useState(1);
 
   const plotRef = useRef<PlotCanvasHandle>(null);
+  const lastConnectRef = useRef<{ path: string; baud: number } | null>(null);
+  // Ref so the keyboard handler closure never goes stale.
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   // Load ports on mount only. Use the ⟳ Ports button to refresh manually.
   useEffect(() => { listPorts(); }, [listPorts]);
@@ -48,6 +52,37 @@ export default function App() {
   useEffect(() => {
     if (status === 'connected') resetView();
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keyboard shortcuts (registered once; read live values via refs).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      const inInput = !!(e.target as HTMLElement).closest('input, textarea, [contenteditable]');
+
+      if (mod) {
+        if (e.key === '1') { e.preventDefault(); setTab('chart'); return; }
+        if (e.key === '2') { e.preventDefault(); setTab('console'); return; }
+        if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          if (statusRef.current === 'connected') { disconnect(); }
+          else if (lastConnectRef.current) { connect(lastConnectRef.current); }
+          return;
+        }
+        if (e.key === 'l' || e.key === 'L') {
+          e.preventDefault();
+          consoleStore.clear();
+          return;
+        }
+      }
+
+      if (!inInput) {
+        if (e.key === ' ') { e.preventDefault(); setPaused((p) => !p); return; }
+        if (e.key === 'Escape') { resetView(); return; }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleSeries(key: string) {
     setHiddenSeries((prev) => {
@@ -83,7 +118,7 @@ export default function App() {
         status={status}
         ports={ports}
         onRefreshPorts={listPorts}
-        onConnect={(path, baud) => connect({ path, baud })}
+        onConnect={(path, baud) => { lastConnectRef.current = { path, baud }; connect({ path, baud }); }}
         onDisconnect={disconnect}
         onMock={(shape) => startMockStream(shape)}
       />

@@ -37,6 +37,19 @@ In general it tries to be very lenient in parsing.
 Header lines name the series; a new header mid-stream (e.g. after a device restart) 
 clears the old series and replots under the new names.
 
+## Using with Arduino, MicroPython, or CircuitPython
+
+Becaue only one program can have open a serial port at a time, be sure to 
+disconnect the port from the Arduino Serial Monitor or your CircuitPython REPL monitor
+before connecting SerialPlotster. 
+
+SerialPlotser has a simple line-based way of sending commands to your program,
+if your code has a terminal interface. Or, in the case of MicroPython/CircuitPython,
+you can use the "^C" / "^D" keys to stop and restart your code. 
+
+And be sure to disconnect SerialPlotster before going back to your IDE! 
+
+
 ## Chart controls
 
 ### Navigation
@@ -66,6 +79,17 @@ Data continues accumulating in the buffer while scrubbing — you never miss sam
 | Time window selector | Sets the width of the visible time window (1 s – 5 m) |
 | **⏸ Pause** / **▶ Resume** | Freeze/resume the live view (data still accumulates) |
 | Legend swatches | Click to toggle individual series visibility |
+
+### Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| Cmd/Ctrl+1 | Switch to Chart tab |
+| Cmd/Ctrl+2 | Switch to Console tab |
+| Cmd/Ctrl+R | Connect (last port/baud) or Disconnect if connected |
+| Cmd/Ctrl+L | Clear console log |
+| Space | Pause / Resume chart (when not typing) |
+| Escape | Exit scrub mode, snap back to live (when not typing) |
 
 
 ## Stack
