@@ -34,7 +34,7 @@ export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect,
       <button
         onClick={onRefreshPorts}
         title="Refresh port list"
-        className="flex items-center gap-1 text-gray-300 hover:text-white text-xs bg-gray-700 hover:bg-gray-600 rounded px-2 py-1 border border-gray-600"
+        className="flex items-center gap-1 text-gray-300 hover:text-white text-xs bg-gray-700 hover:bg-gray-600 rounded px-2 py-1 border border-gray-600 whitespace-nowrap"
       >
         ⟳ Ports
       </button>

@@ -53,6 +53,24 @@ export default function App() {
     if (status === 'connected') resetView();
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Menu event handler — mirrors keyboard shortcuts.
+  useEffect(() => {
+    const unlisten = listen<string>('menu://action', (e) => {
+      switch (e.payload) {
+        case 'chart-tab':      setTab('chart'); break;
+        case 'console-tab':    setTab('console'); break;
+        case 'toggle-connect':
+          if (statusRef.current === 'connected') disconnect();
+          else if (lastConnectRef.current) connect(lastConnectRef.current);
+          break;
+        case 'toggle-pause':  setPaused((p) => { if (p) resetView(); return !p; }); break;
+        case 'back-to-live':  plotRef.current?.resetToLive(); setScrubbing(false); break;
+        case 'clear-console': consoleStore.clear(); break;
+      }
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Keyboard shortcuts (registered once; read live values via refs).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -76,7 +94,7 @@ export default function App() {
       }
 
       if (!inInput) {
-        if (e.key === ' ') { e.preventDefault(); setPaused((p) => !p); return; }
+        if (e.key === ' ') { e.preventDefault(); setPaused((p) => { if (p) resetView(); return !p; }); return; }
         if (e.key === 'Escape') { resetView(); return; }
       }
     }
@@ -145,7 +163,7 @@ export default function App() {
             yFixed={yFixed}
             yMin={yMin}
             yMax={yMax}
-            onTogglePause={() => setPaused((p) => !p)}
+            onTogglePause={() => setPaused((p) => { if (p) resetView(); return !p; })}
             onWindowChange={setWindowMs}
             onResetView={resetView}
             onToggleYFixed={toggleYFixed}

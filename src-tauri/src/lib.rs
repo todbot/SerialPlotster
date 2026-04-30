@@ -4,7 +4,7 @@ use std::io::Write as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::menu::{AboutMetadata, MenuBuilder, SubmenuBuilder};
+use tauri::menu::{AboutMetadata, MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, State};
 #[cfg(debug_assertions)]
 use tauri::Manager;
@@ -558,12 +558,31 @@ pub fn run() {
                 .select_all()
                 .build()?;
 
+            let connect_item = MenuItem::with_id(app, "toggle-connect", "Connect / Disconnect", true, Some("CmdOrCtrl+R"))?;
+            let chart_item   = MenuItem::with_id(app, "chart-tab",      "Chart",               true, Some("CmdOrCtrl+1"))?;
+            let console_item = MenuItem::with_id(app, "console-tab",    "Console",             true, Some("CmdOrCtrl+2"))?;
+            let pause_item   = MenuItem::with_id(app, "toggle-pause",   "Pause / Resume",      true, Some("Space"))?;
+            let live_item    = MenuItem::with_id(app, "back-to-live",   "Back to Live",        true, Some("Escape"))?;
+            let clear_item   = MenuItem::with_id(app, "clear-console",  "Clear Console",       true, Some("CmdOrCtrl+L"))?;
+
+            let view_menu = SubmenuBuilder::new(app, "View")
+                .item(&chart_item)
+                .item(&console_item)
+                .separator()
+                .item(&pause_item)
+                .item(&live_item)
+                .separator()
+                .item(&clear_item)
+                .build()?;
+
             // macOS: first submenu becomes the app menu (shown as the app name).
             // Hide/HideOthers/ShowAll are macOS-only conventions.
             #[cfg(target_os = "macos")]
             let menu = {
                 let app_menu = SubmenuBuilder::new(app, "SerialPlotster")
                     .about(Some(about))
+                    .separator()
+                    .item(&connect_item)
                     .separator()
                     .hide()
                     .hide_others()
@@ -574,6 +593,7 @@ pub fn run() {
                 MenuBuilder::new(app)
                     .item(&app_menu)
                     .item(&edit_menu)
+                    .item(&view_menu)
                     .build()?
             };
 
@@ -581,6 +601,8 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let menu = {
                 let file_menu = SubmenuBuilder::new(app, "File")
+                    .item(&connect_item)
+                    .separator()
                     .about(Some(about))
                     .separator()
                     .quit()
@@ -588,10 +610,24 @@ pub fn run() {
                 MenuBuilder::new(app)
                     .item(&file_menu)
                     .item(&edit_menu)
+                    .item(&view_menu)
                     .build()?
             };
 
             app.set_menu(menu)?;
+
+            app.on_menu_event(|app, event| {
+                let action = match event.id().as_ref() {
+                    "chart-tab"      => "chart-tab",
+                    "console-tab"    => "console-tab",
+                    "toggle-connect" => "toggle-connect",
+                    "toggle-pause"   => "toggle-pause",
+                    "back-to-live"   => "back-to-live",
+                    "clear-console"  => "clear-console",
+                    _ => return,
+                };
+                let _ = app.emit("menu://action", action);
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
