@@ -77,7 +77,7 @@ export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect,
         </button>
       )}
 
-      {import.meta.env.DEV && onMock && !connected && (
+      {onMock && !connected && (
         <>
           <div className="w-px h-5 bg-gray-600 mx-1" />
           <select

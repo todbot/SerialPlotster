@@ -6,8 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::menu::{AboutMetadata, CheckMenuItem, MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, State};
-#[cfg(debug_assertions)]
-use tauri::Manager;
+#[cfg(debug_assertions)] use tauri::Manager;
 
 // ── event payloads ────────────────────────────────────────────────────────────
 
@@ -404,9 +403,8 @@ fn connection_status(state: State<'_, AppState>) -> String {
     state.0.lock().unwrap().status.clone()
 }
 
-// ── mock stream (debug builds only) ──────────────────────────────────────────
+// ── mock stream ───────────────────────────────────────────────────────────────
 
-#[cfg(debug_assertions)]
 #[tauri::command]
 fn start_mock_stream(
     rate_hz: f64,
@@ -451,7 +449,7 @@ fn start_mock_stream(
                     (vec![tri], vec!["tri"])
                 }
                 "noise" => {
-                    let n = ((t * 1234.567).sin() * 999.0).fract();
+                    let n = (t * 7.31).sin() * 0.7 + (t * 3.17).cos() * 0.3;
                     (vec![n], vec!["noise"])
                 }
                 "sincos" => (vec![t.sin(), t.cos()], vec!["sin", "cos"]),
@@ -533,22 +531,21 @@ pub fn run() {
             let live_item    = MenuItem::with_id(app, "back-to-live",   "Back to Live",        true, Some("Escape"))?;
             let clear_item   = MenuItem::with_id(app, "clear-console",  "Clear Console",       true, Some("CmdOrCtrl+L"))?;
 
-            #[cfg(debug_assertions)]
             let mock_toggle_item = CheckMenuItem::with_id(
                 app, "toggle-mock", "Mock Controls", true, false, None::<&str>,
             )?;
 
-            let view_builder = SubmenuBuilder::new(app, "View")
+            let view_menu = SubmenuBuilder::new(app, "View")
                 .item(&chart_item)
                 .item(&console_item)
                 .separator()
                 .item(&pause_item)
                 .item(&live_item)
                 .separator()
-                .item(&clear_item);
-            #[cfg(debug_assertions)]
-            let view_builder = view_builder.separator().item(&mock_toggle_item);
-            let view_menu = view_builder.build()?;
+                .item(&clear_item)
+                .separator()
+                .item(&mock_toggle_item)
+                .build()?;
 
             // macOS: first submenu becomes the app menu (shown as the app name).
             // Hide/HideOthers/ShowAll are macOS-only conventions.
@@ -612,7 +609,6 @@ pub fn run() {
             disconnect,
             send_line,
             connection_status,
-            #[cfg(debug_assertions)]
             start_mock_stream,
         ])
         .run(tauri::generate_context!())
