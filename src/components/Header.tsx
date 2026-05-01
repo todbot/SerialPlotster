@@ -3,7 +3,8 @@ import type { ConnectionState } from '../types/serial';
 
 const BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
-const MOCK_SHAPES = ['all', 'sincos', 'sin', 'cos', 'noise'];
+const MOCK_SHAPES = ['all', 'sincos', 'sin', 'cos', 'tri', 'noise'];
+const MOCK_RATES = [10, 100, 1000, 10000];
 
 interface HeaderProps {
   status: ConnectionState;
@@ -11,13 +12,14 @@ interface HeaderProps {
   onRefreshPorts: () => void;
   onConnect: (port: string, baud: number) => void;
   onDisconnect: () => void;
-  onMock?: (shape: string) => void;
+  onMock?: (shape: string, rate: number) => void;
 }
 
 export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect, onMock }: HeaderProps) {
   const [port, setPort] = useState('');
   const [baud, setBaud] = useState(115200);
   const [mockShape, setMockShape] = useState('all');
+  const [mockRate, setMockRate] = useState(100);
   const connected = status === 'connected';
 
   useEffect(() => {
@@ -85,8 +87,15 @@ export function Header({ status, ports, onRefreshPorts, onConnect, onDisconnect,
           >
             {MOCK_SHAPES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select
+            value={mockRate}
+            onChange={(e) => setMockRate(Number(e.target.value))}
+            className="bg-gray-700 text-xs text-gray-300 rounded px-1.5 py-1 border border-gray-600 [&>option]:bg-gray-700 [&>option]:text-white [color-scheme:dark]"
+          >
+            {MOCK_RATES.map((r) => <option key={r} value={r}>{r} Hz</option>)}
+          </select>
           <button
-            onClick={() => onMock(mockShape)}
+            onClick={() => onMock(mockShape, mockRate)}
             className="text-xs bg-purple-700 hover:bg-purple-600 text-white rounded px-2 py-1"
           >
             ▶ Mock

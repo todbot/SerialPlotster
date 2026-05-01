@@ -4,7 +4,7 @@ use std::io::Write as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::menu::{AboutMetadata, MenuBuilder, MenuItem, SubmenuBuilder};
+use tauri::menu::{AboutMetadata, CheckMenuItem, MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, State};
 #[cfg(debug_assertions)]
 use tauri::Manager;
@@ -16,6 +16,11 @@ struct SampleEvent {
     t_ms: u64,
     values: Vec<f64>,
     labels: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Clone)]
+struct SampleBatch {
+    samples: Vec<SampleEvent>,
 }
 
 #[derive(Serialize, Clone)]
@@ -66,125 +71,58 @@ fn now_ms() -> u64 {
 
 // ── parser ────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, PartialEq)]
-enum LineResult {
-    /// A `# label1 label2 …` header line.
-    Header(Vec<String>),
-    /// A line of numeric data, optionally with inline `label:value` labels.
-    Data {
-        values: Vec<f64>,
-        /// `Some` when every token carried a `label:` prefix; `None` for bare values.
-        labels: Option<Vec<String>>,
-    },
-}
-
-/// Parse one trimmed, newline-stripped line.
-///
-/// Delimiter precedence: `,` → `\t` → ` ` (first delimiter yielding ≥1 valid token wins).
-/// Tokens may be bare floats or `label:float` pairs.
-/// Any token that cannot be interpreted as `f64` discards the entire line.
-fn parse_line(line: &str) -> Option<LineResult> {
-    let line = line.trim();
-    if line.is_empty() {
-        return None;
-    }
-
-    // Header line
-    if let Some(rest) = line.strip_prefix('#') {
-        let labels: Vec<String> = rest.split_whitespace().map(str::to_owned).collect();
-        return if labels.is_empty() { None } else { Some(LineResult::Header(labels)) };
-    }
-
-    // Strip optional Python tuple/list brackets: "(1,2,3)" or "[1,2,3]"
-    let line = match (line.chars().next(), line.chars().last()) {
-        (Some('('), Some(')')) | (Some('['), Some(']')) => line[1..line.len() - 1].trim(),
-        _ => line,
-    };
-    if line.is_empty() {
-        return None;
-    }
-
-    // Normalise "label: value" → "label:value" so spaced colons work with any delimiter.
-    let normalized;
-    let line = if line.contains(": ") {
-        normalized = line.replace(": ", ":");
-        normalized.as_str()
-    } else {
-        line
-    };
-
-    // Data line — try delimiters in precedence order
-    for &delim in &[',', '\t', ' '] {
-        let tokens: Vec<&str> = line
-            .split(delim)
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .collect();
-        if tokens.is_empty() {
-            continue;
-        }
-
-        let mut values: Vec<f64> = Vec::with_capacity(tokens.len());
-        let mut labels: Vec<String> = Vec::with_capacity(tokens.len());
-        let mut has_labels = false;
-        let mut all_valid = true;
-
-        for token in &tokens {
-            if let Some(colon) = token.find(':') {
-                let label = &token[..colon];
-                let val_str = &token[colon + 1..];
-                match val_str.parse::<f64>() {
-                    Ok(v) => {
-                        values.push(v);
-                        labels.push(label.to_owned());
-                        has_labels = true;
-                    }
-                    Err(_) => {
-                        all_valid = false;
-                        break;
-                    }
-                }
-            } else {
-                match token.parse::<f64>() {
-                    Ok(v) => {
-                        values.push(v);
-                        labels.push(String::new());
-                    }
-                    Err(_) => {
-                        all_valid = false;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if all_valid && !values.is_empty() {
-            return Some(LineResult::Data {
-                values,
-                labels: if has_labels { Some(labels) } else { None },
-            });
-        }
-    }
-
-    None
-}
+mod parser;
+use parser::{parse_line, LineResult};
 
 // ── read loop ─────────────────────────────────────────────────────────────────
 
-/// Emit `serial://raw` and, on successful parse, `serial://sample`.
+/// Token-bucket throttle for raw console events.
+/// Refills at `rate_per_sec` tokens/second; one token consumed per allowed event.
+struct RawThrottle {
+    tokens: f64,
+    last_ms: u64,
+    rate_per_sec: f64,
+}
+
+impl RawThrottle {
+    fn new(rate_per_sec: f64) -> Self {
+        Self { tokens: rate_per_sec, last_ms: 0, rate_per_sec }
+    }
+
+    fn allow(&mut self, now_ms: u64) -> bool {
+        if now_ms > self.last_ms {
+            let elapsed = (now_ms - self.last_ms) as f64 / 1000.0;
+            self.tokens = (self.tokens + elapsed * self.rate_per_sec).min(self.rate_per_sec);
+            self.last_ms = now_ms;
+        }
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Parse one line, optionally emit `serial://raw`, and return a `SampleEvent`
+/// if the line contains numeric data.  Emits `serial://gap` immediately on a
+/// mid-stream header (can't be deferred to a batch).
 ///
-/// `t_ms` is supplied by the caller so that multiple lines from the same
-/// `read()` batch each get a distinct, monotonically-increasing timestamp
-/// rather than all sharing the same `now_ms()` value.
-fn process_line(line: &str, t_ms: u64, current_labels: &mut Vec<String>, app: &AppHandle) {
-    let _ = app.emit(
-        "serial://raw",
-        RawEvent {
-            t_ms,
-            direction: "rx".to_string(),
-            text: line.to_owned(),
-        },
-    );
+/// `t_ms` is supplied by the caller for monotonic per-line timestamps.
+/// `emit_raw` is false when the raw token bucket is exhausted.
+fn process_line(
+    line: &str,
+    t_ms: u64,
+    current_labels: &mut Vec<String>,
+    app: &AppHandle,
+    emit_raw: bool,
+) -> Option<SampleEvent> {
+    if emit_raw {
+        let _ = app.emit(
+            "serial://raw",
+            RawEvent { t_ms, direction: "rx".to_string(), text: line.to_owned() },
+        );
+    }
 
     match parse_line(line) {
         Some(LineResult::Header(labels)) => {
@@ -195,25 +133,15 @@ fn process_line(line: &str, t_ms: u64, current_labels: &mut Vec<String>, app: &A
                 let _ = app.emit("serial://gap", ());
             }
             *current_labels = labels;
+            None
         }
         Some(LineResult::Data { values, labels: inline }) => {
             let event_labels = inline.or_else(|| {
-                if current_labels.is_empty() {
-                    None
-                } else {
-                    Some(current_labels.clone())
-                }
+                if current_labels.is_empty() { None } else { Some(current_labels.clone()) }
             });
-            let _ = app.emit(
-                "serial://sample",
-                SampleEvent {
-                    t_ms,
-                    values,
-                    labels: event_labels,
-                },
-            );
+            Some(SampleEvent { t_ms, values, labels: event_labels })
         }
-        None => {}
+        None => None,
     }
 }
 
@@ -231,14 +159,25 @@ fn spawn_read_loop(
         let mut buf = [0u8; 4096];
         let mut line_buf = String::new();
         let mut current_labels: Vec<String> = Vec::new();
+        // Discard the first partial line so we only ever process complete lines.
+        // Connecting mid-transmission produces a tail fragment (e.g. "234\n") that
+        // parses as a garbage value and throws off Y-axis auto-scale.
+        let mut skip_first_line = true;
         // Monotonic timestamp: each parsed line gets at least 1 ms more than the
         // previous one so that lines arriving in the same OS read() batch (e.g.
         // several USB-buffered samples) are spread out on the time axis rather
         // than all collapsing to a single point.
         let mut last_t_ms: u64 = 0;
+        // Batch buffer: collect all samples from one read() call, then emit as a
+        // single serial://sample-batch event.  Reduces IPC crossings from
+        // O(samples/sec) to O(read-calls/sec), which matters at high data rates.
+        let mut batch: Vec<SampleEvent> = Vec::new();
+        // Raw event throttle: at high data rates the console can't display every
+        // line anyway, so cap raw events at 100/sec to avoid flooding IPC.
+        let mut raw_throttle = RawThrottle::new(100.0);
 
         loop {
-            if stop_flag.load(Ordering::Relaxed) {
+            if stop_flag.load(Ordering::SeqCst) {
                 break;
             }
 
@@ -259,17 +198,40 @@ fn spawn_read_loop(
                     let chunk = String::from_utf8_lossy(&buf[..n]);
                     for ch in chunk.chars() {
                         if ch == '\n' {
-                            let line = line_buf.trim_end_matches('\r').to_string();
-                            if !line.is_empty() {
-                                // Ensure each line gets a strictly increasing timestamp
-                                // even when multiple lines arrive in one read() call.
-                                let t = now_ms().max(last_t_ms + 1);
-                                last_t_ms = t;
-                                process_line(&line, t, &mut current_labels, &app);
+                            if skip_first_line {
+                                skip_first_line = false;
+                                line_buf.clear();
+                            } else {
+                                let line = line_buf.trim_end_matches('\r').to_string();
+                                if !line.is_empty() {
+                                    // Ensure each line gets a strictly increasing timestamp
+                                    // even when multiple lines arrive in one read() call.
+                                    let real_now = now_ms();
+                                    let t = real_now.max(last_t_ms + 1);
+                                    last_t_ms = t;
+                                    let emit_raw = raw_throttle.allow(real_now);
+                                    if let Some(s) = process_line(&line, t, &mut current_labels, &app, emit_raw) {
+                                        batch.push(s);
+                                    }
+                                }
+                                line_buf.clear();
                             }
-                            line_buf.clear();
                         } else if ch != '\r' {
                             line_buf.push(ch);
+                        }
+                    }
+                    // Emit all samples from this read() call as a single batch event.
+                    // Re-check stop_flag before emitting: if disconnect was called while
+                    // we were processing this buffer, drop the batch rather than racing
+                    // the status event to the frontend.
+                    if !batch.is_empty() {
+                        if stop_flag.load(Ordering::SeqCst) {
+                            batch.clear();
+                        } else {
+                            let _ = app.emit(
+                                "serial://sample-batch",
+                                SampleBatch { samples: std::mem::take(&mut batch) },
+                            );
                         }
                     }
                 }
@@ -302,7 +264,7 @@ fn stop_connection(state: &AppState) {
         inner.connection.take()
     };
     if let Some(conn) = old {
-        conn.stop_flag.store(true, Ordering::Relaxed);
+        conn.stop_flag.store(true, Ordering::SeqCst);
         drop(conn.write_port);
     }
 }
@@ -368,17 +330,8 @@ fn connect(
     let read_port = port.try_clone().map_err(|e| e.to_string())?;
     let stop_flag = Arc::new(AtomicBool::new(false));
 
-    spawn_read_loop(read_port, Arc::clone(&stop_flag), app.clone());
-
-    {
-        let mut inner = state.0.lock().unwrap();
-        inner.connection = Some(ActiveConnection {
-            write_port: Some(port),
-            stop_flag,
-        });
-        inner.status = "connected".to_string();
-    }
-
+    // Emit connected status and record state BEFORE spawning the read loop so
+    // the frontend's acceptingSamples gate is open before any sample events arrive.
     let _ = app.emit(
         "serial://status",
         StatusEvent {
@@ -386,6 +339,17 @@ fn connect(
             reason: None,
         },
     );
+
+    {
+        let mut inner = state.0.lock().unwrap();
+        inner.connection = Some(ActiveConnection {
+            write_port: Some(port),
+            stop_flag: Arc::clone(&stop_flag),
+        });
+        inner.status = "connected".to_string();
+    }
+
+    spawn_read_loop(read_port, stop_flag, app.clone());
 
     Ok(())
 }
@@ -456,6 +420,22 @@ fn start_mock_stream(
     let flag = Arc::clone(&stop_flag);
     let app_clone = app.clone();
 
+    {
+        let mut inner = state.0.lock().unwrap();
+        inner.connection = Some(ActiveConnection {
+            write_port: None,
+            stop_flag: Arc::clone(&stop_flag),
+        });
+        inner.status = "connected".to_string();
+    }
+    let _ = app.emit(
+        "serial://status",
+        StatusEvent {
+            state: "connected".to_string(),
+            reason: Some("mock stream".to_string()),
+        },
+    );
+
     std::thread::spawn(move || {
         let hz = rate_hz.max(0.001);
         let interval = Duration::from_secs_f64(1.0 / hz);
@@ -466,15 +446,20 @@ fn start_mock_stream(
             let (values, labels): (Vec<f64>, Vec<&str>) = match shape.as_str() {
                 "sin" => (vec![t.sin()], vec!["sin"]),
                 "cos" => (vec![t.cos()], vec!["cos"]),
+                "tri" => {
+                    let tri = 0.75 * (2.0 / std::f64::consts::PI) * (2.0 * t + std::f64::consts::FRAC_PI_2).sin().asin();
+                    (vec![tri], vec!["tri"])
+                }
                 "noise" => {
                     let n = ((t * 1234.567).sin() * 999.0).fract();
                     (vec![n], vec!["noise"])
                 }
                 "sincos" => (vec![t.sin(), t.cos()], vec!["sin", "cos"]),
                 _ => {
-                    // default "all": sin, cos, and a pseudo-noise signal
+                    // default "all": sin, cos, triangle, and a pseudo-noise signal
+                    let tri = 0.75 * (2.0 / std::f64::consts::PI) * (2.0 * t + std::f64::consts::FRAC_PI_2).sin().asin();
                     let noise = ((t * 7.31).sin() * 0.7 + (t * 3.17).cos() * 0.3) * 0.5;
-                    (vec![t.sin(), t.cos(), noise], vec!["sin", "cos", "noise"])
+                    (vec![t.sin(), t.cos(), tri, noise], vec!["sin", "cos", "tri", "noise"])
                 }
             };
 
@@ -500,23 +485,6 @@ fn start_mock_stream(
             std::thread::sleep(interval);
         }
     });
-
-    {
-        let mut inner = state.0.lock().unwrap();
-        inner.connection = Some(ActiveConnection {
-            write_port: None,
-            stop_flag,
-        });
-        inner.status = "connected".to_string();
-    }
-
-    let _ = app.emit(
-        "serial://status",
-        StatusEvent {
-            state: "connected".to_string(),
-            reason: Some("mock stream".to_string()),
-        },
-    );
 
     Ok(())
 }
@@ -565,15 +533,22 @@ pub fn run() {
             let live_item    = MenuItem::with_id(app, "back-to-live",   "Back to Live",        true, Some("Escape"))?;
             let clear_item   = MenuItem::with_id(app, "clear-console",  "Clear Console",       true, Some("CmdOrCtrl+L"))?;
 
-            let view_menu = SubmenuBuilder::new(app, "View")
+            #[cfg(debug_assertions)]
+            let mock_toggle_item = CheckMenuItem::with_id(
+                app, "toggle-mock", "Mock Controls", true, false, None::<&str>,
+            )?;
+
+            let view_builder = SubmenuBuilder::new(app, "View")
                 .item(&chart_item)
                 .item(&console_item)
                 .separator()
                 .item(&pause_item)
                 .item(&live_item)
                 .separator()
-                .item(&clear_item)
-                .build()?;
+                .item(&clear_item);
+            #[cfg(debug_assertions)]
+            let view_builder = view_builder.separator().item(&mock_toggle_item);
+            let view_menu = view_builder.build()?;
 
             // macOS: first submenu becomes the app menu (shown as the app name).
             // Hide/HideOthers/ShowAll are macOS-only conventions.
@@ -624,6 +599,7 @@ pub fn run() {
                     "toggle-pause"   => "toggle-pause",
                     "back-to-live"   => "back-to-live",
                     "clear-console"  => "clear-console",
+                    "toggle-mock"    => "toggle-mock",
                     _ => return,
                 };
                 let _ = app.emit("menu://action", action);
@@ -643,282 +619,5 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-// ── tests ─────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ── header lines ──────────────────────────────────────────────────────────
-
-    #[test]
-    fn header_basic() {
-        assert_eq!(
-            parse_line("# temp hum pres"),
-            Some(LineResult::Header(vec![
-                "temp".into(),
-                "hum".into(),
-                "pres".into()
-            ]))
-        );
-    }
-
-    #[test]
-    fn header_single_label() {
-        assert_eq!(
-            parse_line("# voltage"),
-            Some(LineResult::Header(vec!["voltage".into()]))
-        );
-    }
-
-    #[test]
-    fn header_empty_is_none() {
-        assert_eq!(parse_line("#"), None);
-        assert_eq!(parse_line("#   "), None);
-    }
-
-    // ── bare numeric values ───────────────────────────────────────────────────
-
-    #[test]
-    fn bare_comma_delimited() {
-        assert_eq!(
-            parse_line("1.0,2.0,3.0"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0, 3.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn bare_tab_delimited() {
-        assert_eq!(
-            parse_line("1.0\t2.0\t3.0"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0, 3.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn bare_space_delimited() {
-        assert_eq!(
-            parse_line("1.0 2.0 3.0"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0, 3.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn single_value() {
-        assert_eq!(
-            parse_line("42.0"),
-            Some(LineResult::Data {
-                values: vec![42.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn negative_values() {
-        assert_eq!(
-            parse_line("-1.5,2.3,-0.0"),
-            Some(LineResult::Data {
-                values: vec![-1.5, 2.3, -0.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn scientific_notation() {
-        let r = parse_line("1e3,2.5e-1");
-        assert_eq!(
-            r,
-            Some(LineResult::Data {
-                values: vec![1000.0, 0.25],
-                labels: None,
-            })
-        );
-    }
-
-    // ── label:value pairs ─────────────────────────────────────────────────────
-
-    #[test]
-    fn label_value_comma() {
-        assert_eq!(
-            parse_line("temp:23.5,hum:45.2"),
-            Some(LineResult::Data {
-                values: vec![23.5, 45.2],
-                labels: Some(vec!["temp".into(), "hum".into()]),
-            })
-        );
-    }
-
-    #[test]
-    fn label_value_space() {
-        assert_eq!(
-            parse_line("x:1.0 y:2.0 z:3.0"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0, 3.0],
-                labels: Some(vec!["x".into(), "y".into(), "z".into()]),
-            })
-        );
-    }
-
-    #[test]
-    fn label_value_spaced_colon_space_delim() {
-        assert_eq!(
-            parse_line("temp: 23.5 hum: 45.2 co2: 339"),
-            Some(LineResult::Data {
-                values: vec![23.5, 45.2, 339.0],
-                labels: Some(vec!["temp".into(), "hum".into(), "co2".into()]),
-            })
-        );
-    }
-
-    #[test]
-    fn label_value_spaced_colon_comma_delim() {
-        assert_eq!(
-            parse_line("temp: 23.5,hum: 45.2,co2: 339"),
-            Some(LineResult::Data {
-                values: vec![23.5, 45.2, 339.0],
-                labels: Some(vec!["temp".into(), "hum".into(), "co2".into()]),
-            })
-        );
-    }
-
-    #[test]
-    fn label_value_single() {
-        assert_eq!(
-            parse_line("voltage:3.3"),
-            Some(LineResult::Data {
-                values: vec![3.3],
-                labels: Some(vec!["voltage".into()]),
-            })
-        );
-    }
-
-    // ── invalid / dropped lines ───────────────────────────────────────────────
-
-    #[test]
-    fn non_numeric_text_is_none() {
-        assert_eq!(parse_line("hello world"), None);
-    }
-
-    #[test]
-    fn mixed_invalid_token_drops_line() {
-        assert_eq!(parse_line("1.0,foo,3.0"), None);
-    }
-
-    #[test]
-    fn empty_line_is_none() {
-        assert_eq!(parse_line(""), None);
-        assert_eq!(parse_line("   "), None);
-    }
-
-    #[test]
-    fn bad_label_value_drops_line() {
-        assert_eq!(parse_line("temp:notanumber"), None);
-    }
-
-    // ── delimiter precedence ──────────────────────────────────────────────────
-
-    #[test]
-    fn comma_takes_precedence_over_space() {
-        // "1.0,2.0" — comma wins, not split by space
-        assert_eq!(
-            parse_line("1.0,2.0"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn tab_takes_precedence_over_space() {
-        // "1.0\t2.0" — tab wins over space
-        assert_eq!(
-            parse_line("1.0\t2.0"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0],
-                labels: None,
-            })
-        );
-    }
-
-    // ── whitespace tolerance ──────────────────────────────────────────────────
-
-    #[test]
-    fn leading_trailing_whitespace_trimmed() {
-        assert_eq!(
-            parse_line("  1.0,2.0  "),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn spaces_around_comma_tokens() {
-        assert_eq!(
-            parse_line("1.0 , 2.0 , 3.0"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0, 3.0],
-                labels: None,
-            })
-        );
-    }
-
-    // ── Python tuple / list syntax ────────────────────────────────────────────
-
-    #[test]
-    fn python_tuple() {
-        assert_eq!(
-            parse_line("(1, 2, 3)"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0, 3.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn python_list() {
-        assert_eq!(
-            parse_line("[1.5, -2.5, 3.0]"),
-            Some(LineResult::Data {
-                values: vec![1.5, -2.5, 3.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn python_tuple_single() {
-        assert_eq!(
-            parse_line("(42.0)"),
-            Some(LineResult::Data {
-                values: vec![42.0],
-                labels: None,
-            })
-        );
-    }
-
-    #[test]
-    fn python_list_with_spaces() {
-        assert_eq!(
-            parse_line("[ 1.0 , 2.0 , 3.0 ]"),
-            Some(LineResult::Data {
-                values: vec![1.0, 2.0, 3.0],
-                labels: None,
-            })
-        );
-    }
-}
+mod tests;

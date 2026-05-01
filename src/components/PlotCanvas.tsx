@@ -54,11 +54,6 @@ function drawFrame(
   props: DrawProps,
   lastAutoYRange: { min: number; max: number },
 ): void {
-  if (view.mode === 'live' && !props.paused) {
-    view.endMs = Date.now();
-    view.startMs = view.endMs - props.windowMs;
-  }
-
   const W = canvas.width / dpr;
   const H = canvas.height / dpr;
 
@@ -72,6 +67,20 @@ function drawFrame(
   const plotH = H - PAD.top - PAD.bottom;
   if (plotW <= 0 || plotH <= 0) return;
 
+  if (view.mode === 'live' && !props.paused) {
+    // Snap endMs to pixel-grid boundaries so every sample's pixel-column
+    // assignment is stable between scroll steps — prevents Y-jitter.
+    const now = Date.now();
+    const msPerPixel = props.windowMs / plotW;
+    view.endMs = Math.ceil(now / msPerPixel) * msPerPixel;
+    view.startMs = view.endMs - props.windowMs;
+  } else if (view.endMs === 0) {
+    // First render while paused (e.g. tab re-mount while disconnected):
+    // initialize to current time so the ring buffer data is visible.
+    view.endMs = Date.now();
+    view.startMs = view.endMs - props.windowMs;
+  }
+
   const { startMs, endMs } = view;
   const spanMs = endMs - startMs || 1;
 
@@ -79,38 +88,67 @@ function drawFrame(
   const yOf = (v: number, yMin: number, range: number) =>
     plotT + (1 - (v - yMin) / range) * plotH;
 
-  // ── Y range ────────────────────────────────────────────────────────────────
-  const scanStart = startMs - spanMs; // one extra window back for smooth entry at left edge
+  // ── pixel-bucketed min-max downsampling (Y-range only, visible window) ───────
+  // Scan only [startMs, endMs+200] — no need for the left-entry extension here
+  // because firstVisibleBucket == 0 when we start at startMs.
+  const numBuckets = Math.ceil(plotW);
+  const bucketSpan = endMs + 200 - startMs || 1;
+
+  type BucketData = { mins: Float32Array; maxs: Float32Array; raw: Float32Array };
+  const buckets = new Map<string, BucketData>();
+  for (const key of props.seriesKeys) {
+    if (!props.visible.has(key)) continue;
+    const raw = store.getSeriesData(key);
+    if (!raw) continue;
+    buckets.set(key, {
+      raw,
+      mins: new Float32Array(numBuckets).fill(Infinity),
+      maxs: new Float32Array(numBuckets).fill(-Infinity),
+    });
+  }
+
+  if (buckets.size > 0) {
+    store.forEachSampleFrom(startMs, (t, ri) => {
+      if (t > endMs + 200) return false;
+      const bi = Math.min(numBuckets - 1, Math.floor((t - startMs) / bucketSpan * numBuckets));
+      for (const bd of buckets.values()) {
+        const v = bd.raw[ri];
+        if (!isNaN(v)) {
+          if (v < bd.mins[bi]) bd.mins[bi] = v;
+          if (v > bd.maxs[bi]) bd.maxs[bi] = v;
+        }
+      }
+    });
+  }
+
+  // ── Y range (derived from buckets, or fixed) ───────────────────────────────
   let yMin: number, yMax: number;
   if (props.yRange) {
-    // Fixed mode — use caller-supplied bounds directly
     yMin = props.yRange.min;
     yMax = props.yRange.max;
     if (yMin === yMax) { yMin -= 1; yMax += 1; }
   } else {
-    // Auto mode — scan visible data in the current window
     yMin = Infinity; yMax = -Infinity;
-    for (const key of props.seriesKeys) {
-      if (!props.visible.has(key)) continue;
-      store.forEachSample((t, ri) => {
-        if (t < scanStart) return;
-        if (t > endMs) return false;
-        const v = store.getValue(key, ri);
-        if (!isNaN(v) && t >= startMs) {
-          if (v < yMin) yMin = v;
-          if (v > yMax) yMax = v;
+    for (const { mins, maxs } of buckets.values()) {
+      for (let i = 0; i < numBuckets; i++) {
+        if (mins[i] !== Infinity) {
+          if (mins[i] < yMin) yMin = mins[i];
+          if (maxs[i] > yMax) yMax = maxs[i];
         }
-      });
+      }
     }
     if (!isFinite(yMin)) { yMin = -1; yMax = 1; }
     if (yMin === yMax) { yMin -= 1; yMax += 1; }
     const yPad = (yMax - yMin) * 0.06;
     yMin -= yPad; yMax += yPad;
-    // Remember for getAutoYRange()
     lastAutoYRange.min = yMin;
     lastAutoYRange.max = yMax;
   }
   const yRange = yMax - yMin;
+
+  // Left-entry scan start for line drawing: enough context for a line to enter
+  // from off-screen left, but capped at 1 s so high-rate data stays fast.
+  const scanStart = startMs - Math.min(spanMs, 1000);
 
   // ── Y grid + labels ────────────────────────────────────────────────────────
   ctx.font = '10px monospace';
@@ -143,7 +181,9 @@ function drawFrame(
   ctx.lineWidth = 1;
   ctx.strokeRect(plotL, plotT, plotW, plotH);
 
-  // ── series lines (clipped) ─────────────────────────────────────────────────
+  // ── series lines (inline pixel-bucket downsampling) ───────────────────────
+  // Groups samples by pixel column using actual sample timestamps for x —
+  // preserves connectivity and exact positions at all zoom levels.
   ctx.save();
   ctx.beginPath();
   ctx.rect(plotL, plotT, plotW, plotH);
@@ -152,24 +192,65 @@ function drawFrame(
   ctx.lineWidth = 1.5;
   ctx.lineJoin = 'round';
 
+  // Collect only the active (visible) series to avoid per-sample Map lookups.
+  const activeSeries: { bd: BucketData; color: string }[] = [];
   for (let si = 0; si < props.seriesKeys.length; si++) {
-    const key = props.seriesKeys[si];
-    if (!props.visible.has(key)) continue;
-    ctx.strokeStyle = seriesColor(si);
-    ctx.beginPath();
-    let pen = false;
+    const bd = buckets.get(props.seriesKeys[si]);
+    if (bd) activeSeries.push({ bd, color: seriesColor(si) });
+  }
+  const nSeries = activeSeries.length;
 
-    store.forEachSample((t, ri) => {
-      if (t > endMs + 200) return false; // stop well past right edge
-      const v = store.getValue(key, ri);
-      if (isNaN(v)) { pen = false; return; }
-      if (t < scanStart) { pen = false; return; } // way too old, skip
-      const x = xOf(t);
-      const y = yOf(v, yMin, yRange);
-      if (pen) ctx.lineTo(x, y); else { ctx.moveTo(x, y); pen = true; }
+  if (nSeries > 0) {
+    // Per-series pixel-accumulator state — kept flat for cache locality.
+    const pens    = new Uint8Array(nSeries);          // 0 = no pen
+    const lastPxs = new Int32Array(nSeries).fill(Number.MIN_SAFE_INTEGER);
+    const pxMins  = new Float32Array(nSeries).fill(Infinity);
+    const pxMaxs  = new Float32Array(nSeries).fill(-Infinity);
+    const pxTs    = new Float64Array(nSeries);
+    // One path per series — pre-opened so the single scan can append to any of them.
+    const paths   = activeSeries.map(() => new Path2D());
+
+    store.forEachSampleFrom(scanStart, (t, ri) => {
+      if (t > endMs + 200) return false;
+      const px = Math.floor(xOf(t));
+      for (let si = 0; si < nSeries; si++) {
+        const v = activeSeries[si].bd.raw[ri];
+        if (isNaN(v)) {
+          // Flush accumulated pixel then break the line.
+          if (pxMins[si] !== Infinity) {
+            const x = xOf(pxTs[si]);
+            const y = yOf((pxMins[si] + pxMaxs[si]) * 0.5, yMin, yRange);
+            if (pens[si]) paths[si].lineTo(x, y); else { paths[si].moveTo(x, y); pens[si] = 1; }
+            pxMins[si] = Infinity; pxMaxs[si] = -Infinity;
+          }
+          pens[si] = 0; lastPxs[si] = Number.MIN_SAFE_INTEGER;
+          continue;
+        }
+        if (px !== lastPxs[si]) {
+          // Flush previous pixel.
+          if (pxMins[si] !== Infinity) {
+            const x = xOf(pxTs[si]);
+            const y = yOf((pxMins[si] + pxMaxs[si]) * 0.5, yMin, yRange);
+            if (pens[si]) paths[si].lineTo(x, y); else { paths[si].moveTo(x, y); pens[si] = 1; }
+          }
+          lastPxs[si] = px; pxMins[si] = v; pxMaxs[si] = v; pxTs[si] = t;
+        } else {
+          if (v < pxMins[si]) pxMins[si] = v;
+          if (v > pxMaxs[si]) pxMaxs[si] = v;
+        }
+      }
     });
 
-    ctx.stroke();
+    // Flush final pixel for each series and stroke.
+    for (let si = 0; si < nSeries; si++) {
+      if (pxMins[si] !== Infinity) {
+        const x = xOf(pxTs[si]);
+        const y = yOf((pxMins[si] + pxMaxs[si]) * 0.5, yMin, yRange);
+        if (pens[si]) paths[si].lineTo(x, y); else paths[si].moveTo(x, y);
+      }
+      ctx.strokeStyle = activeSeries[si].color;
+      ctx.stroke(paths[si]);
+    }
   }
 
   ctx.restore();
