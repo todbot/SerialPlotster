@@ -8,22 +8,34 @@ interface ConsoleLogProps {
 
 export function ConsoleLog({ store }: ConsoleLogProps) {
   const [lines, setLines] = useState<readonly RawEvent[]>(store.lines);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
+
+  function scrollToBottom() {
+    const el = containerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
 
   useEffect(() => store.subscribe(() => setLines([...store.lines])), [store]);
 
+  useEffect(() => { scrollToBottom(); }, []); // scroll to bottom on mount
+
   useEffect(() => {
-    if (atBottomRef.current) {
-      bottomRef.current?.scrollIntoView();
-    }
+    if (atBottomRef.current) scrollToBottom();
   }, [lines]);
 
   function onScroll() {
     const el = containerRef.current;
     if (!el) return;
-    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 16;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 16;
+    if (atBottom) {
+      atBottomRef.current = true;
+    } else if (el.scrollTop < lastScrollTopRef.current) {
+      // Only disable auto-scroll when the user scrolls up, not on spurious events.
+      atBottomRef.current = false;
+    }
+    lastScrollTopRef.current = el.scrollTop;
   }
 
   return (
@@ -45,7 +57,6 @@ export function ConsoleLog({ store }: ConsoleLogProps) {
           </span>
         </div>
       ))}
-      <div ref={bottomRef} />
     </div>
   );
 }
