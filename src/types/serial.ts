@@ -10,6 +10,10 @@ export interface RawEvent {
   text: string;
 }
 
+export interface SampleBatch {
+  samples: SampleEvent[];
+}
+
 export interface StatusEvent {
   state: 'connected' | 'disconnected' | 'error';
   reason?: string;

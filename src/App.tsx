@@ -28,6 +28,7 @@ export default function App() {
 
   const [tab, setTab] = useState<'chart' | 'console'>('chart');
   const [paused, setPaused] = useState(false);
+  const [showMock, setShowMock] = useState(false);
   const [windowMs, setWindowMs] = useState(30_000);
   const [scrubbing, setScrubbing] = useState(false);
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
@@ -48,9 +49,14 @@ export default function App() {
   // Load ports on mount only. Use the ⟳ Ports button to refresh manually.
   useEffect(() => { listPorts(); }, [listPorts]);
 
-  // Exit scrub mode whenever a new connection is established.
+  // On connect: resume live view. On disconnect: pause so old data stops scrolling.
   useEffect(() => {
-    if (status === 'connected') resetView();
+    if (status === 'connected') {
+      setPaused(false);
+      resetView();
+    } else if (status === 'disconnected' || status === 'error') {
+      setPaused(true);
+    }
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Menu event handler — mirrors keyboard shortcuts.
@@ -64,6 +70,7 @@ export default function App() {
           else if (lastConnectRef.current) connect(lastConnectRef.current);
           break;
         case 'toggle-pause':  setPaused((p) => { if (p) resetView(); return !p; }); break;
+        case 'toggle-mock':   setShowMock((m) => !m); break;
         case 'back-to-live':  plotRef.current?.resetToLive(); setScrubbing(false); break;
         case 'clear-console': consoleStore.clear(); break;
       }
@@ -138,7 +145,7 @@ export default function App() {
         onRefreshPorts={listPorts}
         onConnect={(path, baud) => { lastConnectRef.current = { path, baud }; connect({ path, baud }); }}
         onDisconnect={disconnect}
-        onMock={(shape) => startMockStream(shape)}
+        onMock={showMock ? (shape, rate) => startMockStream(shape, rate) : undefined}
       />
 
       <TabNav active={tab} onChange={setTab} />

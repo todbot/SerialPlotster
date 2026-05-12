@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { SampleEvent, RawEvent, StatusEvent, ConnectionState } from '../types/serial';
+import type { SampleEvent, SampleBatch, RawEvent, StatusEvent, ConnectionState } from '../types/serial';
 import type { RingStore } from '../store/RingStore';
 import type { ConsoleStore } from '../store/ConsoleStore';
 
@@ -26,10 +26,21 @@ export function useSerialBackend(
   onNewSeriesRef.current = onNewSeries;
   const onHeaderResetRef = useRef(onHeaderReset);
   onHeaderResetRef.current = onHeaderReset;
+  // Gate: only accept samples while connected. Prevents stale in-flight events
+  // that arrive after a disconnect gap from creating ghost segments.
+  const acceptingSamplesRef = useRef(false);
 
   useEffect(() => {
     const subs = [
+      // Batch listener for real serial data (high-rate path).
+      listen<SampleBatch>('serial://sample-batch', (e) => {
+        if (!acceptingSamplesRef.current) return;
+        const isNew = ringStore.addSamples(e.payload.samples);
+        if (isNew) onNewSeriesRef.current();
+      }),
+      // Single-sample listener for the mock stream (low-rate path).
       listen<SampleEvent>('serial://sample', (e) => {
+        if (!acceptingSamplesRef.current) return;
         const { t_ms, values, labels } = e.payload;
         const isNew = ringStore.addSample(t_ms, values, labels);
         if (isNew) onNewSeriesRef.current();
@@ -40,7 +51,12 @@ export function useSerialBackend(
       listen<StatusEvent>('serial://status', (e) => {
         const s = e.payload.state;
         setStatus(s);
-        if (s === 'disconnected' || s === 'error') ringStore.addGap();
+        if (s === 'connected') {
+          acceptingSamplesRef.current = true;
+        } else {
+          acceptingSamplesRef.current = false;
+          ringStore.addGap();
+        }
       }),
       listen('serial://gap', () => {
         onHeaderResetRef.current();
